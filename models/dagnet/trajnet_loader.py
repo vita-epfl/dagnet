@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-
+from tqdm import tqdm
 import trajnetplusplustools
 
 # ==============
@@ -272,7 +272,7 @@ def trajnet_loader_wrapper(
         fill_missing_obs=fill_missing_obs,
         keep_single_ped_scenes=keep_single_ped_scenes
         )
-    traj_loader = list(traj_loader)
+    traj_loader = list(tqdm(traj_loader))
 
     # Calculate max_agents
     max_agents = -1
