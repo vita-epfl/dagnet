@@ -92,10 +92,10 @@ parser.add_argument('--alpha', type=float, default=0.2, help='Negative steep for
 
 # Miscellaneous
 parser.add_argument('--seed', default=128, type=int, required=False, help='PyTorch random seed')
-parser.add_argument('--print_every_batch', default=30, type=int, required=False, help='How many batches to print loss inside an epoch')
-parser.add_argument('--save_every', default=10, type=int, required=False, help='How often save model checkpoint')
-parser.add_argument('--eval_every', default=20, type=int, required=False, help='How often evaluate current model')
-parser.add_argument('--num_samples', default=20, type=int, required=False, help='Number of samples for evaluation')
+parser.add_argument('--print_every_batch', default=10, type=int, required=False, help='How many batches to print loss inside an epoch')
+parser.add_argument('--save_every', default=1, type=int, required=False, help='How often save model checkpoint')
+parser.add_argument('--eval_every', default=1, type=int, required=False, help='How often evaluate current model')
+parser.add_argument('--num_samples', default=3, type=int, required=False, help='Number of samples for evaluation')
 parser.add_argument('--run', required=True, type=str, help='Current run name')
 parser.add_argument('--resume', default=False, action='store_true', help='Resume from last saved checkpoint')
 
@@ -391,32 +391,17 @@ def main(args):
             model, warmup, optimizer, wr
             ) # train
 
-        ade, _ = validate(
-            args, epoch, traj_val_loader, val_loader, 
-            model, warmup, lr_scheduler, wr
-            )   # val
-        
-        # check for new best
-        if 0 <= ade.item() < best_ade:
-            # save new best
-            fn = '{}/checkpoint_epoch_{}.pth'.format(save_best_dir, str(epoch))
-            best_ade = ade.item()
-            for child in save_best_dir.glob('*'):
-                if child.is_file():
-                    child.unlink()  # delete previous best
-            save_checkpoint(fn, args, epoch, model, optimizer, lr_scheduler, best_ade, ade_list_val, fde_list_val,
-                            ade_list_test, fde_list_test)
-            logging.info('Saved best checkpoint to ' + fn)
 
         # periodically save checkpoint
         if epoch % args.save_every == 0:
-            fn = '{}/checkpoint_epoch_{}.pth'.format(save_dir, str(epoch))
+            # fn = '{}/checkpoint_epoch_{}.pth'.format(save_dir, str(epoch))
+            fn = '{}/checkpoint_latest.pth'.format(save_dir)
             save_checkpoint(fn, args, epoch, model, optimizer, lr_scheduler, best_ade, ade_list_val, fde_list_val,
                             ade_list_test, fde_list_test)
 
         # periodically evaluate model
         if epoch % args.eval_every == 0:
-            fn = '{}/checkpoint_epoch_{}.pth'.format(eval_save_dir, str(epoch))
+            fn = '{}/checkpoint_latest.pth'.format(eval_save_dir)
             save_checkpoint(fn, args, epoch, model, optimizer, lr_scheduler, best_ade, ade_list_val, fde_list_val,
                             ade_list_test, fde_list_test)
 
@@ -448,3 +433,14 @@ if __name__ == '__main__':
     set_random_seed(args.seed)
     DEBUG = (sys.gettrace() is not None)
     main(args)
+
+
+######################
+# TODO:
+#   - Return the part with saving the besto checkpoint
+#   - RuntimeError: probability tensor contains either `inf`, `nan` or element < 0
+#       utils.py, L205
+######################
+
+
+
