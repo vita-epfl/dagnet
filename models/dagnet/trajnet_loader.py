@@ -252,3 +252,35 @@ def trajnet_loader(
             obs_goals, pred_goals_gt = [], []
             # ==============
 
+
+def trajnet_loader_wrapper(
+    data_loader, 
+    args, 
+    drop_distant_ped=False, 
+    test=False, 
+    keep_single_ped_scenes=False,
+    fill_missing_obs=False
+    ):
+    """
+    This wrapper serves the purpose of returning max_agents, needed for running
+    DAGnet training and evaluation. 
+    """
+    traj_loader = trajnet_loader(
+        data_loader, args, 
+        drop_distant_ped=drop_distant_ped, 
+        test=test,
+        fill_missing_obs=fill_missing_obs,
+        keep_single_ped_scenes=keep_single_ped_scenes
+        )
+    traj_loader = list(traj_loader)
+
+    # Calculate max_agents
+    max_agents = -1
+    for batch in traj_loader:
+        seq_start_end_batch = batch[-1]
+        for (start, end) in seq_start_end_batch:
+            n_agents = end - start 
+            max_agents = n_agents if n_agents > max_agents else max_agents
+
+    return int(max_agents), traj_loader
+    
