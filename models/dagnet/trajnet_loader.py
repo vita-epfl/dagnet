@@ -3,8 +3,15 @@ import torch
 
 import trajnetplusplustools
 
-
+# ==============
 # === DAGnet ===
+# Add the dagnet directory to the path
+import sys 
+import pathlib
+ROOT_DIR = pathlib.Path('.').absolute().parent.parent
+print('ROOT DIR = ', ROOT_DIR)
+sys.path.append(str(ROOT_DIR))
+
 from models.utils.utils import compute_goals_fixed
 
 N_CELLS_X = 0
@@ -147,9 +154,11 @@ def trajnet_loader(
     obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel = [], [], [], []
     loss_mask, seq_start_end = [], []
     non_linear_ped = torch.Tensor([]) # dummy
-
+    
+    # ==============
     # === DAGnet ===
-    goals = []
+    obs_goals, pred_goals_gt = [], []
+    # ==============
 
     num_batches = 0
     for batch_idx, (filename, scene_id, paths) in enumerate(data_loader):
@@ -186,25 +195,31 @@ def trajnet_loader(
             curr_mask = torch.ones((pos_scene.shape[0], pos_scene.shape[1]))
             loss_mask.append(curr_mask)
 
-            # === DAGnet ===
+            # ================================
+            # === DAGnet: limits and goals ===
             # Calculating the limits of each scene (rounding up to 1 decimal)
             x_min, x_max = pos_scene[:, :, 0].min(), pos_scene[:, :, 0].max()
             y_min, y_max = pos_scene[:, :, 1].min(), pos_scene[:, :, 1].max()
 
-            #########################
-            # TODO:
-            #   - ITERATE OVER THE PEDESTRIAN DIMENSION -> OBTAIN tj
-            #   - APPEND ALL THE GOALS -> NP CONCAT
-            #   - SPLIT THE GOALS INTO OBS AND PRED
+            # Iterate over the pedestrian dimension and obtain each trajectory
+            for ped_ind in range(pos_scene.shape[1]):
+                curr_ped_trajectory = pos_scene[:, ped_ind, :]                
+                
+                # Trajectory of shape [timesteps, 2] => compute goals
+                curr_fixed_goals = compute_goals_fixed(
+                    curr_ped_trajectory, 
+                    x_min, x_max, y_min, y_max, 
+                    N_CELLS_X, N_CELLS_Y,
+                    window=args.goals_window
+                    )
+                curr_fixed_goals = np.expand_dims(curr_fixed_goals, axis=1)
 
-            # Using the calculated limits, obtain fixed goals
-            compute_goals_fixed(
-                tj.swapaxes(0, 1), 
-                x_min, x_max, y_min, y_max, 
-                N_CELLS_X, N_CELLS_Y,
-                window=args.goals_window
-                )
-            #########################
+                # Split the goals into observed and predicted
+                curr_obs_goals = curr_fixed_goals[:args.obs_len, :]
+                curr_pred_goals = curr_fixed_goals[-args.pred_len:, :]
+                obs_goals.append(torch.Tensor(curr_obs_goals))
+                pred_goals_gt.append(torch.Tensor(curr_pred_goals))
+            # ================================
 
             num_batches += 1
 
@@ -220,7 +235,20 @@ def trajnet_loader(
             seq_start_end = [0] + seq_start_end
             seq_start_end = torch.LongTensor(np.array(seq_start_end).cumsum())
             seq_start_end = torch.stack((seq_start_end[:-1], seq_start_end[1:]), dim=1)
-            yield (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
-                non_linear_ped, loss_mask, seq_start_end)
+            # ==============
+            # === DAGnet ===
+            # Yield the goals and reset their lists afterwards
+            obs_goals = torch.cat(obs_goals, dim=1).cuda()
+            pred_goals_gt = torch.cat(pred_goals_gt, dim=1).cuda()
+
+            yield (
+                obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
+                obs_goals, pred_goals_gt,
+                non_linear_ped, loss_mask, seq_start_end
+                )
+            
             obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel = [], [], [], []
             loss_mask, seq_start_end = [], []
+            obs_goals, pred_goals_gt = [], []
+            # ==============
+
