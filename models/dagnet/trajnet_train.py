@@ -43,7 +43,7 @@ parser.add_argument("--log_dir", default="./", help="Directory containing loggin
 
 # =================
 # === TrajNet++ ===
-parser.add_argument("--dataset_name", default="eth_data", type=str)
+parser.add_argument("--dataset_name", default="colfree_trajdata", type=str)
 parser.add_argument("--delim", default="\t")
 parser.add_argument("--loader_num_workers", default=4, type=int)
 parser.add_argument("--obs_len", default=8, type=int)
@@ -234,9 +234,15 @@ def train(args, epch, traj_train_loader, train_loader, model, warmup, optimizer,
         if args.adjacency_type == 0:
             adj_out = compute_adjs(args, seq_start_end).cuda()
         elif args.adjacency_type == 1:
-            adj_out = compute_adjs_distsim(args, seq_start_end, obs_traj.detach().cpu(), pred_traj_gt.detach().cpu()).cuda()
+            adj_out = compute_adjs_distsim(
+                args, seq_start_end, 
+                obs_traj.detach().cpu(), pred_traj_gt.detach().cpu()
+                ).cuda()
         elif args.adjacency_type == 2:
-            adj_out = compute_adjs_knnsim(args, seq_start_end, obs_traj.detach().cpu(), pred_traj_gt.detach().cpu()).cuda()
+            adj_out = compute_adjs_knnsim(
+                args, seq_start_end, 
+                obs_traj.detach().cpu(), pred_traj_gt.detach().cpu()
+                ).cuda()
 
         # during training we feed the entire trjs to the model
         all_traj = torch.cat((obs_traj, pred_traj_gt), dim=0)
@@ -244,7 +250,9 @@ def train(args, epch, traj_train_loader, train_loader, model, warmup, optimizer,
         all_goals_ohe = torch.cat((obs_goals_ohe, pred_goals_gt_ohe), dim=0)
 
         optimizer.zero_grad()
-        kld, nll, ce, _ = model(all_traj, all_traj_rel, all_goals_ohe, seq_start_end, adj_out)
+        kld, nll, ce, _ = model(
+            all_traj, all_traj_rel, all_goals_ohe, seq_start_end, adj_out
+            )
         loss = (warmup[epch-1] * kld) + nll + (ce * args.CE_weight)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
@@ -269,7 +277,7 @@ def train(args, epch, traj_train_loader, train_loader, model, warmup, optimizer,
 
     end = time()
     elapsed = str(timedelta(seconds=(ceil(end - start))))
-    logging.info('Epoch [{}], time elapsed: {}'.format(epch, elapsed))
+    logging.info('Epoch [{}], Avg loss: {}, time elapsed: {}'.format(epch, avg_loss, elapsed))
 
 
 def main(args):
@@ -391,26 +399,45 @@ def main(args):
             model, warmup, optimizer, wr
             ) # train
 
-
         # periodically save checkpoint
         if epoch % args.save_every == 0:
             # fn = '{}/checkpoint_epoch_{}.pth'.format(save_dir, str(epoch))
             fn = '{}/checkpoint_latest.pth'.format(save_dir)
-            save_checkpoint(fn, args, epoch, model, optimizer, lr_scheduler, best_ade, ade_list_val, fde_list_val,
-                            ade_list_test, fde_list_test)
+            save_checkpoint(
+                fn, args, epoch, model, optimizer, lr_scheduler, 
+                best_ade, ade_list_val, fde_list_val, ade_list_test, fde_list_test
+                )
 
         # periodically evaluate model
         if epoch % args.eval_every == 0:
             fn = '{}/checkpoint_latest.pth'.format(eval_save_dir)
-            save_checkpoint(fn, args, epoch, model, optimizer, lr_scheduler, best_ade, ade_list_val, fde_list_val,
-                            ade_list_test, fde_list_test)
+            save_checkpoint(
+                fn, args, epoch, model, optimizer, lr_scheduler, 
+                best_ade, ade_list_val, fde_list_val, ade_list_test, fde_list_test
+                )
 
-            ade_val, fde_val = evaluate(args, model, traj_val_loader, val_loader, args.num_samples)
-
+            # Evaluate and save performance
+            ade_val, fde_val = evaluate(
+                args, model, traj_val_loader, val_loader, args.num_samples
+                )
             ade_list_val.append((ade_val, epoch))
             fde_list_val.append((fde_val, epoch))
 
             logging.info('**** VALIDATION **** ==> ADE: {}, FDE: {}'.format(ade_val, fde_val))
+
+            # Save new best model
+            if 0 <= ade_val.item() < best_ade:
+                fn = '{}/checkpoint_epoch_{}.pth'.format(save_best_dir, str(epoch))
+                best_ade = ade_val.item()
+                for child in save_best_dir.glob('*'):
+                    if child.is_file():
+                        child.unlink()  # delete previous best
+                save_checkpoint(
+                    fn, args, epoch, model, optimizer, lr_scheduler, 
+                    best_ade, ade_list_val, fde_list_val, ade_list_test, fde_list_test
+                    )
+                logging.info('Saved best checkpoint to ' + fn)
+
 
         # print min metrics at the end of training
         if epoch == args.num_epochs:
@@ -434,13 +461,6 @@ if __name__ == '__main__':
     DEBUG = (sys.gettrace() is not None)
     main(args)
 
-
-######################
-# TODO:
-#   - Return the part with saving the besto checkpoint
-#   - RuntimeError: probability tensor contains either `inf`, `nan` or element < 0
-#       utils.py, L205
-######################
 
 
 
