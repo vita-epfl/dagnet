@@ -88,27 +88,14 @@ def predict_scene(model, batch, args):
 
 
 def load_predictor(args):
-    # Current run main directory
-    curr_run_dir = BASE_DIR / '{}'.format(args.run)
-    saves_dir = curr_run_dir / 'saves'
-    saves_best = saves_dir / 'best'
-
-    if args.best:
-        # load best checkpoint
-        save = list(pathlib.Path(saves_best).glob('*.pth'))[-1]
-    elif args.epoch is not None:
-        # load checkpoint from specific epoch
-        save = saves_dir.absolute() / 'checkpoint_epoch_{}.pth'.format(args.epoch)
-        if not pathlib.Path(save).is_file():
-            raise(Exception("Couldn't find a checkpoint for the specified epoch"))
-    else:
-        # load last checkpoint
-        save = list(pathlib.Path(saves_dir).glob('*.pth'))[-1]
-
-    print(f'Loading checkpoint at path {save}')
-    checkpoint = torch.load(save)
-    args.__dict__ = checkpoint['args']
+    print(f'Loading checkpoint at path {args.checkpoint}')
+    checkpoint = torch.load(args.checkpoint)
     n_max_agents = checkpoint['n_max_agents']
+
+    args_cp = checkpoint['args']  
+    for key in args_cp:
+        if key not in args:
+            args.__dict__[key] = args_cp[key]
 
     model = DAGNet(args, n_max_agents).cuda()
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -253,7 +240,7 @@ def main():
     parser.add_argument('--seed', default=128, type=int, required=False)
     parser.add_argument('--run', required=True, type=str, help='Current run name')
     parser.add_argument(
-        '--best', default=False, action='store_true', 
+        '--best', default=True, action='store_true', 
         help='Evaluate with best checkpoint'
         )
     parser.add_argument(
@@ -269,10 +256,29 @@ def main():
 
     scipy.seterr('ignore')
 
-    args.checkpoint = \
-        os.path.join('models', args.dataset_name, 'model_best.pth.tar')
-    args.path = os.path.join('datasets', args.dataset_name, 'test_pred/')
-    args.output = [args.checkpoint]
+    # Prepare checkpoint path
+    curr_run_dir = os.path.join(BASE_DIR, args.run)
+    saves_dir = os.path.join(curr_run_dir, 'saves')
+    saves_best = os.path.join(saves_dir, 'best')
+
+    if args.best:
+        print('Loading best checkpoint')
+        args.checkpoint = list(pathlib.Path(saves_best).glob('*.pth'))[-1]
+    elif args.epoch is not None:
+        print(f'Loading checkpoint from epoch {args.epoch}')
+        args.checkpoint = os.path.join(
+            saves_dir.absolute(), 'checkpoint_epoch_{}.pth'.format(args.epoch)
+            )
+        if not pathlib.Path(args.checkpoint).is_file():
+            raise(Exception("Couldn't find a checkpoint for the specified epoch"))
+    else:
+        print('Loading latest checkpoint')
+        args.checkpoint = list(pathlib.Path(saves_dir).glob('*.pth'))[-1]
+
+    args.output = [str(args.checkpoint)]
+    args.path = os.path.join(
+        str(ROOT_DIR), 'datasets', args.dataset_name, 'test_pred/'
+        )
 
     # Adding arguments with names that fit the evaluator module
     # in order to keep it unchanged
@@ -291,11 +297,6 @@ def main():
 
 
 if __name__ == '__main__':
-    
-    ########################
-    # TODO:
-    ########################
-
     main()
 
 
