@@ -111,8 +111,10 @@ DATEFMT = '%Y/%m/%d %H:%M'
 DEBUG = False
 
 
-def save_checkpoint(fn, args, epoch, model, optimizer, lr_scheduler, best_ade, ade_list_val, fde_list_val,
-                    ade_list_test, fde_list_test):
+def save_checkpoint(
+    fn, args, epoch, model, optimizer, lr_scheduler, best_ade, 
+    ade_list_val, fde_list_val, ade_list_test, fde_list_test, n_max_agents
+    ):
     torch.save({
         'args': args.__dict__,
         'epoch': epoch,
@@ -123,7 +125,8 @@ def save_checkpoint(fn, args, epoch, model, optimizer, lr_scheduler, best_ade, a
         'ade_list_val': ade_list_val,
         'fde_list_val': fde_list_val,
         'ade_list_test': ade_list_test,
-        'fde_list_test': fde_list_test
+        'fde_list_test': fde_list_test,
+        'n_max_agents': n_max_agents
     }, fn)
 
 
@@ -404,16 +407,16 @@ def main(args):
             # fn = '{}/checkpoint_epoch_{}.pth'.format(save_dir, str(epoch))
             fn = '{}/checkpoint_latest.pth'.format(save_dir)
             save_checkpoint(
-                fn, args, epoch, model, optimizer, lr_scheduler, 
-                best_ade, ade_list_val, fde_list_val, ade_list_test, fde_list_test
+                fn, args, epoch, model, optimizer, lr_scheduler, best_ade, 
+                ade_list_val, fde_list_val, ade_list_test, fde_list_test, n_max_agents
                 )
 
         # periodically evaluate model
         if epoch % args.eval_every == 0:
             fn = '{}/checkpoint_latest.pth'.format(eval_save_dir)
             save_checkpoint(
-                fn, args, epoch, model, optimizer, lr_scheduler, 
-                best_ade, ade_list_val, fde_list_val, ade_list_test, fde_list_test
+                fn, args, epoch, model, optimizer, lr_scheduler, best_ade, 
+                ade_list_val, fde_list_val, ade_list_test, fde_list_test, n_max_agents
                 )
 
             # Evaluate and save performance
@@ -433,8 +436,8 @@ def main(args):
                     if child.is_file():
                         child.unlink()  # delete previous best
                 save_checkpoint(
-                    fn, args, epoch, model, optimizer, lr_scheduler, 
-                    best_ade, ade_list_val, fde_list_val, ade_list_test, fde_list_test
+                    fn, args, epoch, model, optimizer, lr_scheduler, best_ade, 
+                    ade_list_val, fde_list_val, ade_list_test, fde_list_test, n_max_agents
                     )
                 logging.info('Saved best checkpoint to ' + fn)
 
