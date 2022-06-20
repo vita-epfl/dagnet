@@ -304,7 +304,7 @@ def main(args):
         )
     val_loader, _, _ = prepare_data(
         os.path.join(DATASET_DIR, args.dataset_name), 
-        subset='/val/', sample=args.sample        
+        subset='/test_private/', sample=args.sample        
         )
     test_loader, _, _ = prepare_data(
         os.path.join(DATASET_DIR, args.dataset_name), 
