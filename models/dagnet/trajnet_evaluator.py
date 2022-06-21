@@ -55,7 +55,8 @@ def predict_scene(model, batch, args):
     elif args.adjacency_type == 1:
         adj_out = compute_adjs_distsim(
             args, seq_start_end, 
-            obs_traj.detach().cpu(), pred_traj_gt.detach().cpu()
+            obs_traj.detach().cpu(), pred_traj_gt.detach().cpu(),
+            trajnet_evaluate=True
             ).cuda()
     elif args.adjacency_type == 2:
         adj_out = compute_adjs_knnsim(
@@ -297,6 +298,12 @@ def main():
 
 
 if __name__ == '__main__':
+
+    #####################
+    # TODO:
+    #   - Add trajnet_evaluate flag to other adjacency matrix functions
+    #####################
+
     main()
 
 

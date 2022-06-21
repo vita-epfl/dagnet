@@ -136,12 +136,18 @@ def compute_adjs_knnsim(args, seq_start_end, obs_traj, pred_traj_gt):
     return block_diag_irregular(adj_out)
 
 
-def compute_adjs_distsim(args, seq_start_end, obs_traj, pred_traj_gt):
+def compute_adjs_distsim(
+    args, seq_start_end, obs_traj, pred_traj_gt, trajnet_evaluate=False
+    ):
+    num_timesteps = args.obs_len + args.pred_len
+    if trajnet_evaluate:
+        num_timesteps = args.obs_len
+
     adj_out = []
     for _, (start, end) in enumerate(seq_start_end):
         obs_and_pred_traj = torch.cat((obs_traj, pred_traj_gt))
         sim_t = []
-        for t in range(0, args.obs_len + args.pred_len):
+        for t in range(0, num_timesteps):
             dists = distance_matrix(np.asarray(obs_and_pred_traj[t, start:end, :]),
                                     np.asarray(obs_and_pred_traj[t, start:end, :]))
             #sum_dist = np.sum(dists)
