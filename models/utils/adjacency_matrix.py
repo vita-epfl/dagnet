@@ -105,23 +105,33 @@ def adjs_knn_sim_pred(top_k_neigh, seq_start_end, pred_traj):
 
 ###################################### ORIGINAL ADJ MATRICES ######################################
 
-def compute_adjs(args, seq_start_end):
+def compute_adjs(args, seq_start_end, trajnet_evaluate=False):
+    num_timesteps = args.obs_len + args.pred_len
+    if trajnet_evaluate:
+        num_timesteps = args.obs_len
+
     adj_out = []
     for _, (start, end) in enumerate(seq_start_end):
         mat = []
-        for t in range(0, args.obs_len + args.pred_len):
+        for t in range(0, num_timesteps):
             interval = end - start
             mat.append(torch.from_numpy(np.ones((interval, interval))))
         adj_out.append(torch.stack(mat, 0))
     return block_diag_irregular(adj_out)
 
 
-def compute_adjs_knnsim(args, seq_start_end, obs_traj, pred_traj_gt):
+def compute_adjs_knnsim(
+    args, seq_start_end, obs_traj, pred_traj_gt, trajnet_evaluate=False
+    ):
+    num_timesteps = args.obs_len + args.pred_len
+    if trajnet_evaluate:
+        num_timesteps = args.obs_len
+
     adj_out = []
     for _, (start, end) in enumerate(seq_start_end):
         obs_and_pred_traj = torch.cat((obs_traj, pred_traj_gt))
         knn_t = []
-        for t in range(0, args.obs_len + args.pred_len):
+        for t in range(0, num_timesteps):
             dists = distance_matrix(np.asarray(obs_and_pred_traj[t, start:end, :]),
                                     np.asarray(obs_and_pred_traj[t, start:end, :]))
             knn = np.argsort(dists, axis=1)[:, 0: min(args.top_k_neigh, dists.shape[0])]

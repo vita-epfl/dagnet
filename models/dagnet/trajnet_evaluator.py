@@ -318,12 +318,6 @@ def main():
 
 
 if __name__ == '__main__':
-
-    #####################
-    # TODO:
-    #   - Add trajnet_evaluate flag to other adjacency matrix functions
-    #####################
-
     main()
 
 
