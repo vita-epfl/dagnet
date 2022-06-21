@@ -33,6 +33,17 @@ from models.utils.utils import relative_to_abs, to_goals_one_hot
 # ==============
 
 
+def linear_prediction(args, obs_traj):
+    """ 
+    Performs linear predictions for the provided observations. 
+    """
+    last_velocity = obs_traj[args.obs_len - 1] - obs_traj[args.obs_len - 2]
+    pred_traj_fake = torch.ones((args.pred_len, 1, 2))
+    for t in range(args.pred_len):
+        pred_traj_fake[t] = obs_traj[args.obs_len - 1] + last_velocity * (t + 1)
+
+    return pred_traj_fake
+
 
 def predict_scene(model, batch, args):
     assert len(batch) == 9
@@ -64,23 +75,31 @@ def predict_scene(model, batch, args):
             obs_traj.detach().cpu(), pred_traj_gt.detach().cpu()
             ).cuda()   
 
-    # Find the distribution by passing through the model
-    _, _, _, h = model(
-        obs_traj, obs_traj_rel, obs_goals_ohe, seq_start_end, adj_out
-        )
-    
+    # Check if single pedestrian
+    is_single_ped_scene = bool(obs_traj.shape[1] == 1)
+
+    # If it is NOT a single-pedestrian scene, 
+    # find the distribution by passing through the model
+    if not is_single_ped_scene:
+        _, _, _, h = model(
+            obs_traj, obs_traj_rel, obs_goals_ohe, seq_start_end, adj_out
+            )
+
     # Get the predictions and save them
     multimodal_outputs = {}
     for num_p in range(args.modes):
-        # Sample one trajectory (per pedestrian)
-        pred_traj_fake_rel = model.sample(
-            args.pred_len, h, obs_traj[-1], obs_goals_ohe[-1], seq_start_end
-            )
+        if not is_single_ped_scene:
+            # Sample one trajectory (per pedestrian)
+            pred_traj_fake_rel = model.sample(
+                args.pred_len, h, obs_traj[-1], obs_goals_ohe[-1], seq_start_end
+                )
+            # Convert to absolute coordinates
+            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
+        else:
+            # Obtain a linear prediction for the single pedestrian
+            pred_traj_fake = linear_prediction(args, obs_traj) 
         
-        # Convert to absolute coordinates
-        pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
-        # Samples are of shape [T, num_peds, 2]
-
+        # pred_traj_fake is of shape [pred_len, num_peds, 2]
         output_primary = pred_traj_fake[:, 0]
         output_neighs = pred_traj_fake[:, 1:]
         multimodal_outputs[num_p] = [output_primary, output_neighs]
@@ -197,6 +216,7 @@ def main():
     parser.add_argument("--loader_num_workers", default=4, type=int)
     parser.add_argument("--skip", default=1, type=int)
     parser.add_argument("--sample", type=float, default=1.0)
+    parser.add_argument('--labels', required=False, nargs='+')
     # =================
 
     # ==============
